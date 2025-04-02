@@ -4,7 +4,7 @@ This project provides a Docker-based environment to build and run Zimbra-related
 
 ## 🚀 Quick Start
 
-This project includes a single unified `docker.sh` script that handles both building and running the Docker container.
+This project includes a single unified `docker.sh` script that handles both building and running the Docker container. It exists do test and debug zimbra installation scripts and or the zimbra build environment. It can install any zimbra release and updates. I use it to debug some forum questions where their envionment is messed up and I am attempting to replicate it to see how zimbra's install or build scripts behave. When the container terminates, all changes made to it are gone. I then repeat the docker.sh --run to start fresh (note: you may have to docker rm zimbra if you have had previous runs).
 
 ### 0. Clone the repository
 ```bash
@@ -13,14 +13,14 @@ cd ZimbraRHEL8
 ```
 
 ### 1. Inital Setup 
-This will create a ~/Zimbra directory on the host and populate it.
+This will create a ~/Zimbra directory on the host and populate it. Only needs to be done once.
 ```bash
-./docker.sh --init
+% ./docker.sh --init
 ```
 
 ### 2. Build the Image
 ```bash
-./docker.sh --build
+% ./docker.sh --build
 ```
 
 This will:
@@ -31,9 +31,9 @@ This will:
 - Start bind9 with a delegated mail.example.com and approproiate /etc/hosts so that zimbra installs can be tested with install.sh
 
 ### 3. Run the Container
-This will leave you with a root shell.
+This will leave you with a root shell on the container. if you have previously run ./docker.sh --init, then execute /mnt/zimbra/setup_env.sh
 ```bash
-./docker.sh --run
+% ./docker.sh --run
 # /mnt/zimbra/setup_env.sh
 # su - <username>
 ```
