@@ -6,7 +6,7 @@ This project provides a Docker-based environment to build and run Zimbra-related
 
 This project includes a single unified `docker.sh` script that handles both building and running the Docker container. It exists do test and debug zimbra installation scripts and or the zimbra build environment. It can install any zimbra release and updates. I use it to debug some forum questions where their envionment is messed up and I am attempting to replicate it to see how zimbra's install or build scripts behave. When the container terminates, all changes made to it are gone. I then repeat the docker.sh --run to start fresh (note: you may have to docker rm zimbra if you have had previous runs).
 
-Note: Due to the way that console windows and docker buffering works within containers, it is recommended that you use the slogin session to do any install.sh, builds from zimbra, etc.
+``Note: Due to the way that console windows and docker buffering works within containers, it is recommended that you use the slogin session to do any install.sh, builds from zimbra, etc.``
 
 ### 0. Clone the repository
 ```bash
