@@ -1,15 +1,21 @@
 # 🐳 Zimbra Build & Run Docker Image
 
-This project provides a Docker-based environment to build and run Zimbra-related tools in a consistent and isolated container, using Oracle Linux 8. It's designed for contributors and developers who want a minimal setup with pre-installed tools like `bind`, `sshd`, Java 8, Maven, Perl, and more. 
+This project provides a Docker-based environment to build and run Zimbra-related tools in a consistent and isolated container, using Oracle Linux 8. It's designed for contributors and developers who want a minimal setup with pre-installed tools like `bind`, `sshd`, Java 8, Maven, Perl, and more. See docker.sh for a full description of how this works.
 
 ## 🚀 Quick Start
 
 This project includes a single unified `docker.sh` script that handles both building and running the Docker container.
 
-### 1. Clone the repository
+### 0. Clone the repository
 ```bash
-git clone https://github.com/your-repo/zimbra-docker.git
-cd zimbra-docker
+git clone git@github.com:JimDunphy/DockerZimbraRHEL8.git
+cd ZimbraRHEL8
+```
+
+### 1. Inital Setup 
+This will create a ~/Zimbra directory on the host and populate it.
+```bash
+./docker.sh --init
 ```
 
 ### 2. Build the Image
@@ -21,10 +27,15 @@ This will:
 - Automatically detect your current username.
 - Copy your SSH public key from `~/.ssh/id_rsa.pub` to the Docker build context.
 - Build the image using that key and your username.
+- Setup suid for your current username
+- Start bind9 with a delegated mail.example.com and approproiate /etc/hosts so that zimbra installs can be tested with install.sh
 
 ### 3. Run the Container
+This will leave you with a root shell.
 ```bash
 ./docker.sh --run
+# /mnt/zimbra/setup_env.sh
+# su - <username>
 ```
 
 This will:
@@ -32,6 +43,14 @@ This will:
 - Expose SSH on port 777
 - Mount your `~/Zimbra` directory into the container at `/mnt/zimbra`
 
+### 4. slogin to the container
+Provided you did the docker.sh --init and ~/Zimbra is populated, you can now do.
+```bash
+% slogin localhost -p 777
+% cd mybuild
+% ./build_zimbra.sh --init
+% ./build_zimbra.sh --dry-run --version 10.1
+```
 ---
 
 ## 🗂️ Volume Mount
@@ -42,7 +61,7 @@ The container expects a volume to be mounted at:
 ~/Zimbra  ➡️  /mnt/zimbra
 ```
 
-You should create this directory **before running the container**, e.g.:
+If you do not do docker.sh --init, you should create this directory **before running the container**, e.g.:
 
 ```bash
 mkdir -p ~/Zimbra
@@ -53,12 +72,13 @@ You can use this folder to store:
 - Zimbra source code or release tarballs
 - SSH key archive (`ssh-keys.tar`) generated on first run
 - Build artifacts and installation logs
+- Anything you want the container to have access to
 
 ---
 
 ## 🔧 Zimbra Build Script
 
-If you're building Zimbra releases, we recommend using [Jim Dunphy's `build_zimbra.sh`](https://github.com/JimDunphy/build_zimbra.sh):
+If you're building Zimbra releases,  I use this: [`build_zimbra.sh`](https://github.com/JimDunphy/build_zimbra.sh):
 
 ```bash
 cd /mnt/zimbra
@@ -109,7 +129,7 @@ docker rmi oracle8/rhel8
 
 ## 📜 License
 
-MIT — do what you want, just don't blame us if it eats your homework.
+MIT — do what you want with this.
 
 ---
 
