@@ -106,7 +106,7 @@ cd build_zimbra.sh
 To remove the container (if not using `--rm`):
 
 ```bash
-docker rm -f zimbra
+docker rm zimbra
 ```
 
 To remove the image:
