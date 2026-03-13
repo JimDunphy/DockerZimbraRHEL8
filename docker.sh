@@ -64,15 +64,21 @@ set -e
 IMAGE_NAME="oracle8/zimbra"
 CONTAINER_NAME="zimbra"
 USER_NAME="$(id -nu)"			# our local account
-SSH_PORT="777"				# slogin localhost -p $SSH_PORT
+SSH_PORT="717"				# slogin localhost -p $SSH_PORT
 SSH_KEY="$HOME/.ssh/id_rsa.pub"         # no password to local account on container
 ZIMBRA_DIR="$HOME/Zimbra"		# local account shares this with container
 
 show_help() {
   echo "Usage: $0 [--build] [--run] [--help]"
   echo "  --build   Build the Docker image with your SSH key"
-  echo "  --run     Run the container"
+  echo "  --run     Run the container attached"
+  echo "  --run-detached Run the container in the background"
+  echo "  --shell   Open a root shell in the running container"
+  echo "  --stop    Stop the running container"
+  echo "  --status  Show container status"
+  echo "  --resume  Start an existing container"
   echo "  --init    Set up the ~/Zimbra directory with environment files and keys"
+  echo "  --purge   docker system prune --volumes"
   echo "  --help    Show this help message"
 }
 
@@ -82,7 +88,7 @@ build_image() {
     exit 1
   fi
 
-  echo "🔧 Copying SSH key to build context..."
+  echo "Copying SSH key to build context..."
   cp "$SSH_KEY" ./id_rsa.pub
 
   echo "Building Docker image as user '$USER_NAME'..."
@@ -93,13 +99,40 @@ build_image() {
 }
 
 run_container() {
-  echo "🚀 Running container..."
+  echo "Running container..."
   docker run -it \
     --hostname mail.example.com \
     --name "$CONTAINER_NAME" \
+    -e "ZIMBRA_SKIP_DNS_SETUP=${ZIMBRA_SKIP_DNS_SETUP:-0}" \
     -v "$ZIMBRA_DIR":/mnt/zimbra \
     -p $SSH_PORT:22 \
     "$IMAGE_NAME"
+}
+
+run_container_detached() {
+  echo "Running container in the background..."
+  docker run -dit \
+    --hostname mail.example.com \
+    --name "$CONTAINER_NAME" \
+    -e "ZIMBRA_SKIP_DNS_SETUP=${ZIMBRA_SKIP_DNS_SETUP:-0}" \
+    -v "$ZIMBRA_DIR":/mnt/zimbra \
+    -p $SSH_PORT:22 \
+    "$IMAGE_NAME"
+}
+
+shell_container() {
+  echo "Opening a root shell in $CONTAINER_NAME..."
+  docker exec -it "$CONTAINER_NAME" /bin/bash
+}
+
+stop_container() {
+  echo "Stopping $CONTAINER_NAME..."
+  docker stop "$CONTAINER_NAME"
+}
+
+status_container() {
+  docker ps -a --filter "name=^/${CONTAINER_NAME}$" \
+    --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
 init_zimbra_dir() {
@@ -109,7 +142,8 @@ init_zimbra_dir() {
   echo "Copying setup_env.sh to $ZIMBRA_DIR..."
   cp ./setup_env.sh "$ZIMBRA_DIR/setup_env.sh"
   cp ./build_zimbra.sh "$ZIMBRA_DIR/build_zimbra.sh"
-  chmod +x "$ZIMBRA_DIR/setup_env.sh"
+  cp ./build_zm_web_client_war.sh "$ZIMBRA_DIR/build_zm_web_client_war.sh"
+  chmod +x "$ZIMBRA_DIR/setup_env.sh" "$ZIMBRA_DIR/build_zimbra.sh" "$ZIMBRA_DIR/build_zm_web_client_war.sh"
 
   echo "Checking for SSH keys..."
   if [ -f "$HOME/.ssh/id_rsa" ] && [ -f "$HOME/.ssh/id_rsa.pub" ]; then
@@ -142,11 +176,29 @@ case "$1" in
   --run)
     run_container
     ;;
+  --run-detached)
+    run_container_detached
+    ;;
+  --shell)
+    shell_container
+    ;;
+  --stop)
+    stop_container
+    ;;
+  --status)
+    status_container
+    ;;
+  --resume)
+    echo "Starting $CONTAINER_NAME..."
+    docker start "$CONTAINER_NAME"
+    ;;
   --init)
     init_zimbra_dir
+    ;;
+  --purge)
+    docker system prune --volumes
     ;;
   --help | * )
     show_help
     ;;
 esac
-

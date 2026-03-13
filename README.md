@@ -1,149 +1,209 @@
-# 🐳 Zimbra Build & Run Docker Image
+# DockerZimbraRHEL8
 
-This project provides a Docker-based environment to build and run Zimbra-related tools in a consistent and isolated container, using Oracle Linux 8. It's designed for contributors and developers who want a minimal setup with pre-installed tools like `bind`, `sshd`, Java 8, Maven, Perl, and more. See docker.sh for a full description of how this works.
+This repository provides an Oracle Linux 8 Docker environment for:
 
-## 🚀 Quick Start
+- building Zimbra releases
+- testing Zimbra installs and upgrade behavior
+- building static assets for Project Z Bridge, including `zimbra.war`
 
-This project includes a single unified `docker.sh` script that handles both building and running the Docker container. It exists to test and debug zimbra installation scripts and or the zimbra build environment. It can install any zimbra release and updates. I use it to debug some forum questions where their envionment is messed up and I am attempting to replicate it to see how zimbra's install or build scripts behave. When the container terminates, all changes made to it are gone. I then repeat the docker.sh --run to start fresh (note: you may have to docker rm zimbra if you have had previous runs).
+The container is intended for development and test work. It is not a
+production Zimbra runtime.
 
-``Note: Due to the way that console windows and docker buffering works within containers, it is recommended that you use the slogin session to do any install.sh, builds from zimbra, etc.``
+## Overview
 
-### 0. Clone the repository
-```bash
-git clone git@github.com:JimDunphy/DockerZimbraRHEL8.git
-cd DockerZimbraRHEL8
-```
-
-### 1. Inital Setup 
-This will create a ~/Zimbra directory on the host and populate it. Only needs to be done once.
-```bash
-% ./docker.sh --init
-```
-
-### 2. Build the Image
-```bash
-% ./docker.sh --build
-```
-
-This will:
-- Automatically detect your current username.
-- Copy your SSH public key from `~/.ssh/id_rsa.pub` to the Docker build context.
-- Build the image using that key and your username.
-- Setup suid for your current username
-- Start bind9 with a delegated mail.example.com and approproiate /etc/hosts so that zimbra installs can be tested with install.sh
-
-### 3. Run the Container
-This will leave you with a root shell on the container. if you have previously run ./docker.sh --init, then execute /mnt/zimbra/setup_env.sh
-```bash
-% ./docker.sh --run
-# /mnt/zimbra/setup_env.sh
-# su - <username>
-```
-
-This will:
-- Run the container interactively
-- Expose SSH on port 777
-- Mount your `~/Zimbra` directory into the container at `/mnt/zimbra`
-
-### 4. slogin to the container
-Provided you did the docker.sh --init and ~/Zimbra is populated, you can now do.
-```bash
-% slogin localhost -p 777
-% cd mybuild
-% ./build_zimbra.sh --init
-% ./build_zimbra.sh --dry-run --version 10.1
-```
----
-
-## 🗂️ Volume Mount
-
-The container expects a volume to be mounted at:
+The main entry point is:
 
 ```bash
-~/Zimbra  ➡️  /mnt/zimbra
+./docker.sh
 ```
 
-If you do not do docker.sh --init, you should create this directory **before running the container**, e.g.:
+That wrapper handles:
+
+- host-side initialization of `~/Zimbra`
+- image builds
+- attached container runs
+- detached container runs
+- opening a root shell in a running container
+
+The default SSH port for the container is `717`.
+
+## Host Mount
+
+The container uses this bind mount:
+
+```text
+~/Zimbra -> /mnt/zimbra
+```
+
+This mount is used to share:
+
+- helper scripts such as `build_zimbra.sh` and `build_zm_web_client_war.sh`
+- SSH material used for Git access
+- build artifacts
+- logs and other working files you want to keep on the host
+
+## Quick Start
+
+### 1. Initialize the host mount
+
+This creates `~/Zimbra`, copies helper scripts into it, and copies your SSH
+keys if they are present.
 
 ```bash
-mkdir -p ~/Zimbra
+./docker.sh --init
 ```
 
-You can use this folder to store:
-
-- Zimbra source code or release tarballs
-- SSH key archive (`ssh-keys.tar`) generated on first run
-- Build artifacts and installation logs
-- Anything you want the container to have access to
-
----
-
-## 🔧 Zimbra Build Script
-
-If you're building Zimbra releases,  I use this: [`build_zimbra.sh`](https://github.com/JimDunphy/build_zimbra.sh):
+### 2. Build the Docker image
 
 ```bash
-cd /mnt/zimbra
-git clone https://github.com/JimDunphy/build_zimbra.sh.git
-cd build_zimbra.sh
-./build_zimbra.sh --help
+./docker.sh --build
 ```
 
----
+### 3. Start the container
 
-## 🧰 Tools Included in the Image
+Attached root shell:
 
-- Java 8 (OpenJDK)
-- Maven, Ant, Git, Perl, Ruby
-- GCC, make, RPM tools
-- DNS: `bind`, `bind-utils`
-- Networking: `telnet`, `traceroute`, `tcpdump`, `nmap`
-- SSH server pre-configured
-- Sudo (passwordless for the created user)
+```bash
+./docker.sh --run
+```
 
----
+Detached:
 
-## 🧼 Cleanup
+```bash
+./docker.sh --run-detached
+```
 
-To remove the container (if not using `--rm`):
+Open a root shell in an already-running container:
+
+```bash
+./docker.sh --shell
+```
+
+If you only need the container for builds and do not need the DNS/BIND setup,
+start it like this:
+
+```bash
+ZIMBRA_SKIP_DNS_SETUP=1 ./docker.sh --run-detached
+```
+
+### 4. SSH into the container
+
+Long-running builds are expected to be run over SSH rather than through the
+attached Docker console.
+
+```bash
+ssh -p 717 <user>@localhost
+```
+
+If you initialized `~/Zimbra`, then inside the container run:
+
+```bash
+/mnt/zimbra/setup_env.sh
+cd ~/mybuild
+```
+
+## Building Zimbra Releases
+
+This container is commonly used with:
+
+```bash
+build_zimbra.sh
+```
+
+Typical flow inside the container:
+
+```bash
+cd ~/mybuild
+./build_zimbra.sh --init
+./build_zimbra.sh --version 10.1
+```
+
+`build_zimbra.sh --init` remains the source of truth for preparing the normal
+Zimbra build environment.
+
+## Building `zimbra.war` for Project Z Bridge
+
+This repository also includes:
+
+```bash
+build_zm_web_client_war.sh
+```
+
+This helper builds the classic web client war without requiring the full
+release build.
+
+Typical flow inside the container:
+
+```bash
+cd ~/mybuild
+./build_zm_web_client_war.sh --init
+./build_zm_web_client_war.sh --version 10.1.16
+```
+
+The artifact is produced at:
+
+```bash
+~/mybuild/zwc-war/zm-web-client/build/dist/jetty/webapps/zimbra.war
+```
+
+If `/mnt/zimbra` is mounted, the helper also copies the artifact there.
+
+Detailed notes for that workflow are in:
+
+[BUILD_ZM_WEB_CLIENT_WAR.md](./BUILD_ZM_WEB_CLIENT_WAR.md)
+
+## Notes on the Build Environment
+
+- The Docker image contains Java 8, Ant, Maven, Git, Perl, Ruby, compilers,
+  RPM tooling, SSH, and various network/debug utilities.
+- The container can be used both for full Zimbra release builds and for direct
+  `zm-web-client` war builds.
+- The direct war helper is designed to piggyback on the same build model used
+  by `build_zimbra.sh --init` and `zm-build/build.pl`.
+
+## Common Commands
+
+Show help:
+
+```bash
+./docker.sh --help
+```
+
+Remove the container:
 
 ```bash
 docker rm zimbra
 ```
 
-To remove the image:
+Remove the image:
 
 ```bash
-docker rmi oracle8/rhel8
+docker rmi oracle8/zimbra
 ```
 
----
+Prune Docker volumes and unused objects:
 
-## 🙋 Troubleshooting
+```bash
+./docker.sh --purge
+```
 
-- ❌ **SSH key not found**  
-  Make sure your public key exists at `~/.ssh/id_rsa.pub`. The script requires it for user login setup inside the container.
+## Troubleshooting
 
-- ⚠️ **Volume not mounted properly**  
-  Ensure the `~/Zimbra` folder exists **before** running the container. You can verify it's mounted by checking `/mnt/zimbra` inside the container.
+If SSH login does not work:
 
----
+- verify the container is running
+- verify port `717` is not blocked or already remapped differently
+- verify your public key exists at `~/.ssh/id_rsa.pub` before `./docker.sh --build`
 
-## 📜 License
+If the `/mnt/zimbra` mount is empty:
 
-MIT — do what you want with this.
+- verify `~/Zimbra` exists on the host
+- rerun `./docker.sh --init` if needed
 
----
+If a build behaves differently in the Docker console than over SSH:
 
-### 📦 What This Container Does
+- use SSH and treat that as the supported build path
 
-- 📨 **Creates a local DNS zone for `example.com`**  
-  The container sets up a `mail.example.com` hostname and a BIND9 zone file (`example.com.zone`) on startup. This allows the container to self-resolve DNS entries during Zimbra installation and testing.
+## License
 
-- 🔐 **Passwordless `sudo` access**  
-  The default user (based on the one running the build script) is granted full `sudo` privileges without requiring a password. This simplifies administrative tasks and testing workflows inside the container.
-
-- 🔁 **Safe for build, install, and re-install workflows**  
-  The container is designed for **repeated builds and installs of Zimbra** using local source code or release packages. It does **not** persist user data or configuration between runs unless explicitly mounted into the `~/Zimbra` volume.
-
-> ⚠️ This container is intended for **development and testing purposes only**. It is **not suitable for production use** or running real user services.
+MIT

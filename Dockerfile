@@ -40,9 +40,11 @@ RUN dnf clean all && \
         tcpdump \
         nmap \
         hamcrest-core && \
-    dnf remove -y java-11-openjdk* 2>/dev/null || true  # Remove Java 11 if present && \
-    alternatives --set java java-1.8.0-openjdk.x86_64  # Force Java 8 as default && \
+    dnf remove -y java-11-openjdk* 2>/dev/null || true && \
     dnf clean all
+
+ENV JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
+ENV PATH=${JAVA_HOME}/bin:${PATH}
 
 RUN dnf install -y openssh-server && \
     systemctl enable sshd

@@ -1,18 +1,25 @@
 #!/bin/bash
 
-# Fix hosts
-/usr/local/bin/fix-hosts.sh
+# Fix hosts when present. Build-only containers don't need this helper.
+if [ -x /usr/local/bin/fix-hosts.sh ]; then
+  /usr/local/bin/fix-hosts.sh
+else
+  echo "[entrypoint] /usr/local/bin/fix-hosts.sh not present; skipping"
+fi
 
 #==================================================================================
 # BEGIN BIND9
 
-# Path to named.conf
-NAMED_CONF="/etc/named.conf"
+if [ "${ZIMBRA_SKIP_DNS_SETUP:-0}" = "1" ]; then
+  echo "[entrypoint] ZIMBRA_SKIP_DNS_SETUP=1; skipping DNS/BIND setup"
+else
+  # Path to named.conf
+  NAMED_CONF="/etc/named.conf"
 
-# Only add our zone if it’s not already in named.conf
-if ! grep -q 'zone "example.com"' $NAMED_CONF; then
-  echo "Adding example.com zone to named.conf..."
-  cat >> $NAMED_CONF <<EOF
+  # Only add our zone if it’s not already in named.conf
+  if ! grep -q 'zone "example.com"' "$NAMED_CONF"; then
+    echo "Adding example.com zone to named.conf..."
+    cat >> "$NAMED_CONF" <<EOF
 
 zone "example.com" IN {
     type master;
@@ -20,32 +27,31 @@ zone "example.com" IN {
     allow-query { any; };
 };
 EOF
-fi
+  fi
 
-# --------------------------
-# FIX PERMISSIONS FOR BIND
-# --------------------------
-mkdir -p /run/named /var/named/data /var/named/dynamic
-touch /var/named/data/named.run /run/named/session.key /var/named/named.ca
-chown -R named:named /run/named /var/named
-chmod -R 755 /run/named /var/named
-chmod 644 /var/named/data/named.run /run/named/session.key /var/named/named.ca
+  # --------------------------
+  # FIX PERMISSIONS FOR BIND
+  # --------------------------
+  mkdir -p /run/named /var/named/data /var/named/dynamic
+  touch /var/named/data/named.run /run/named/session.key /var/named/named.ca
+  chown -R named:named /run/named /var/named
+  chmod -R 755 /run/named /var/named
+  chmod 644 /var/named/data/named.run /run/named/session.key /var/named/named.ca
 
+  touch /var/named/data/named.run
+  touch /var/named/named.ca
+  touch /run/named/session.key
 
-touch /var/named/data/named.run
-touch /var/named/named.ca  # Optional: only if you use root hints
-touch /run/named/session.key
+  chown -R named:named /run/named /var/named
+  chmod -R 755 /run/named /var/named
+  chmod 644 /var/named/data/named.run /var/named/named.ca /run/named/session.key
 
-chown -R named:named /run/named /var/named
-chmod -R 755 /run/named /var/named
-chmod 644 /var/named/data/named.run /var/named/named.ca /run/named/session.key
-
-# --------------------------
-# DNS ZONE FILE CHECK
-# --------------------------
-if [ ! -f /var/named/example.com.zone ]; then
-  echo "[entrypoint] Creating default example.com zone"
-  cat > /var/named/example.com.zone <<EOF
+  # --------------------------
+  # DNS ZONE FILE CHECK
+  # --------------------------
+  if [ ! -f /var/named/example.com.zone ]; then
+    echo "[entrypoint] Creating default example.com zone"
+    cat > /var/named/example.com.zone <<EOF
 \$TTL 86400
 @   IN  SOA mail.example.com. root.example.com. (
         2025032801 ; Serial
@@ -59,24 +65,25 @@ mail IN  A       $(ip route get 1 | awk '{print $7; exit}')
     IN  MX 10   mail.example.com.
 EOF
 
-  chown named:named /var/named/example.com.zone
-  chmod 644 /var/named/example.com.zone
-fi
+    chown named:named /var/named/example.com.zone
+    chmod 644 /var/named/example.com.zone
+  fi
 
-# Set DNS resolver to use local bind
-# Backup and rewrite /etc/resolv.conf only once
-if [ ! -f /etc/resolv.conf.bak ]; then
-  echo "Backing up /etc/resolv.conf..."
-  cp /etc/resolv.conf /etc/resolv.conf.bak
-  echo "search example.com" > /etc/resolv.conf
-  echo "nameserver 127.0.0.1" >> /etc/resolv.conf
-  echo "# Added by entrypoint to use local bind" >> /etc/resolv.conf
-else
-  echo "/etc/resolv.conf already modified; skipping"
-fi
+  # Set DNS resolver to use local bind
+  # Backup and rewrite /etc/resolv.conf only once
+  if [ ! -f /etc/resolv.conf.bak ]; then
+    echo "Backing up /etc/resolv.conf..."
+    cp /etc/resolv.conf /etc/resolv.conf.bak
+    echo "search example.com" > /etc/resolv.conf
+    echo "nameserver 127.0.0.1" >> /etc/resolv.conf
+    echo "# Added by entrypoint to use local bind" >> /etc/resolv.conf
+  else
+    echo "/etc/resolv.conf already modified; skipping"
+  fi
 
-echo "Starting named..."
-/usr/sbin/named -c /etc/named.conf -u named &
+  echo "Starting named..."
+  /usr/sbin/named -c /etc/named.conf -u named &
+fi
 
 # END BIND9
 #==================================================================================
