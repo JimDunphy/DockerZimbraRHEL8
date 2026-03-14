@@ -7,6 +7,19 @@
 #   Build zm-web-client and produce zimbra.war inside the DockerZimbraRHEL8
 #   container. This is intended to be run as the normal user over SSH.
 #
+# Caveat:
+#   --init does not invent its own system dependency model. It delegates to
+#   build_zimbra.sh --init when the environment is not already present.
+#   That means build_zimbra.sh must be available alongside this script, in the
+#   current directory, in ~/mybuild, or under /mnt/zimbra.
+#
+#   This repository ships a copy of build_zimbra.sh. If someone copies only
+#   build_zm_web_client_war.sh by itself, then --init may fail until
+#   build_zimbra.sh is also made available.
+#
+#   Upstream source for build_zimbra.sh:
+#   https://github.com/JimDunphy/build_zimbra.sh
+#
 # Example:
 #   ./build_zm_web_client_war.sh --init
 #   ./build_zm_web_client_war.sh --version 10.1.16
@@ -44,6 +57,8 @@ Build zm-web-client and produce zimbra.war for a Zimbra release.
 
 Options:
   --init                Reuse build_zimbra.sh --init if setup is not already present
+                        build_zimbra.sh must be available unless the build
+                        environment is already prepared
   --version VERSION     Release to build, e.g. 10.1 or 10.1.16
   --workdir DIR         Workspace to clone/build in (default: ${WORKDIR})
   --output-dir DIR      Copy zimbra.war to DIR (default: ${OUTPUT_DIR})

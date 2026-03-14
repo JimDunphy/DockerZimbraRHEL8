@@ -41,6 +41,13 @@ Current behavior:
 - if `ant-contrib` is missing, the helper follows the same jar/bootstrap model used by `zm-build/build.pl`
 - `zm-web-client` is built with `ant clean-pkg prod-war`
 
+Important caveat:
+
+- `build_zm_web_client_war.sh --init` depends on `build_zimbra.sh --init`
+- this repository ships a copy of `build_zimbra.sh`
+- if someone copies only `build_zm_web_client_war.sh` by itself, `--init` may fail until `build_zimbra.sh` is also available
+- if needed, `build_zimbra.sh` can be obtained from `https://github.com/JimDunphy/build_zimbra.sh`
+
 Example usage:
 
 ```bash

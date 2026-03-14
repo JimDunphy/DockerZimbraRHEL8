@@ -132,6 +132,16 @@ build_zm_web_client_war.sh
 This helper builds the classic web client war without requiring the full
 release build.
 
+`--init` is not a standalone environment bootstrap. It reuses
+`build_zimbra.sh --init` when the build environment is not already prepared.
+This repository ships a copy of `build_zimbra.sh`, and anyone copying only
+`build_zm_web_client_war.sh` elsewhere should also bring `build_zimbra.sh` or
+obtain it from:
+
+```text
+https://github.com/JimDunphy/build_zimbra.sh
+```
+
 Typical flow inside the container:
 
 ```bash
