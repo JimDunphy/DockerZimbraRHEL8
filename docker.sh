@@ -25,6 +25,7 @@ ACTION="--help"
 WAR_VERSION=""
 COPY_SSH_KEYS=0
 ALLOW_DIRTY=0
+DEVELOPER_MODE=0
 
 show_help() {
   cat <<EOF
@@ -50,6 +51,8 @@ Options:
   --copy-ssh-keys         Copy ~/.ssh/id_rsa and ~/.ssh/id_rsa.pub into the workspace
   --allow-dirty           Reuse local edits under ./Zimbra/zwc-war when the
                           existing checkout is already on the resolved tag
+  --developer-mode        Build from ./Zimbra/zwc-war instead of a container-
+                          local source tree; intended for maintainers
 EOF
 }
 
@@ -258,20 +261,26 @@ wait_for_exec() {
 run_war_build_in_container() {
   local version="$1"
   local dirty_flag=""
+  local build_workdir="/tmp/zwc-war"
 
   if [ "$ALLOW_DIRTY" -eq 1 ]; then
     dirty_flag="--allow-dirty"
   fi
 
-  docker exec -i -u "$USER_NAME" "$CONTAINER_NAME" bash -s -- "$version" "$dirty_flag" <<'EOF'
+  if [ "$DEVELOPER_MODE" -eq 1 ]; then
+    build_workdir="/mnt/zimbra/zwc-war"
+  fi
+
+  docker exec -i -u "$USER_NAME" "$CONTAINER_NAME" bash -s -- "$version" "$dirty_flag" "$build_workdir" <<'EOF'
 set -euo pipefail
 
 version="$1"
 dirty_flag="$2"
+build_workdir="$3"
 
 cd /mnt/zimbra
 ./build_zm_web_client_war.sh --init
-./build_zm_web_client_war.sh --version "$version" --workdir /mnt/zimbra/zwc-war --output-dir /mnt/zimbra ${dirty_flag}
+./build_zm_web_client_war.sh --version "$version" --workdir "$build_workdir" --output-dir /mnt/zimbra ${dirty_flag}
 EOF
 }
 
@@ -304,6 +313,9 @@ build_war() {
   local existing_state="stopped"
 
   [ -n "$WAR_VERSION" ] || fail "--build-war requires a version"
+  if [ "$ALLOW_DIRTY" -eq 1 ] && [ "$DEVELOPER_MODE" -ne 1 ]; then
+    fail "--allow-dirty requires --developer-mode"
+  fi
 
   if container_exists; then
     existing_mount="$(container_mount_source)"
@@ -317,7 +329,13 @@ build_war() {
 
   log "Host changes for this command are limited to ${ZIMBRA_DIR} and ${ARTIFACT_DIR}/zimbra-*.war"
   log "Package installation and compilation happen inside the container"
-  log "Container source workspace for this command: /mnt/zimbra/zwc-war"
+  if [ "$DEVELOPER_MODE" -eq 1 ]; then
+    log "Developer mode: source workspace is persisted under ${ZIMBRA_DIR}/zwc-war"
+    log "Container source workspace for this command: /mnt/zimbra/zwc-war"
+  else
+    log "Admin mode: source workspace is container-local and not copied to the host"
+    log "Container source workspace for this command: /tmp/zwc-war"
+  fi
   init_zimbra_dir
 
   if container_running; then
@@ -379,6 +397,10 @@ parse_args() {
         ;;
       --allow-dirty)
         ALLOW_DIRTY=1
+        shift
+        ;;
+      --developer-mode)
+        DEVELOPER_MODE=1
         shift
         ;;
       *)

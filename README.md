@@ -24,7 +24,7 @@ That single command:
 1. creates `./Zimbra` inside this repository if needed
 2. builds the Docker image if needed
 3. starts a temporary container if needed
-4. builds `zimbra.war` inside the container
+4. builds `zimbra.war` inside the container using a container-local source tree
 5. copies the finished war back beside `docker.sh`
 6. prints the host path to the artifact
 
@@ -50,6 +50,7 @@ Notes:
 - no packages are installed on the host for this path
 - the host-side `./Zimbra` directory is only a bind-mounted workspace
 - package installation and compilation happen inside the Docker container
+- source checkouts are not copied to the host in this admin mode
 - if you want a different local workspace, use `--zimbra-dir /path/to/workdir`
 
 Examples:
@@ -76,13 +77,15 @@ Most admins can ignore this section.
 Developer-oriented examples:
 
 ```bash
-./docker.sh --build-war 10.1.16
-./docker.sh --build-war 10.1.16 --allow-dirty
+./docker.sh --build-war 10.1.16 --developer-mode
+./docker.sh --build-war 10.1.16 --developer-mode --allow-dirty
 ```
 
 Developer behavior:
 
 - exact versions such as `10.1.16` are pinned
+- `--developer-mode` persists the source tree under `./Zimbra/zwc-war`
+- `--allow-dirty` requires `--developer-mode`
 - `--allow-dirty` reuses local edits only when the existing checkout is already on the resolved tag
 - `--allow-dirty` will not switch a dirty checkout to a newer tag
 - local source checkouts live under `./Zimbra/zwc-war`
@@ -256,7 +259,7 @@ user's home directory.
 For local development on the checked-out sources:
 
 ```bash
-./docker.sh --build-war 10.1.16 --allow-dirty
+./docker.sh --build-war 10.1.16 --developer-mode --allow-dirty
 ```
 
 That mode is intended for the loop of:
@@ -284,7 +287,7 @@ https://github.com/JimDunphy/build_zimbra.sh
 Typical flow inside the container:
 
 ```bash
-cd ~/mybuild
+cd /mnt/zimbra
 ./build_zm_web_client_war.sh --init
 ./build_zm_web_client_war.sh --version 10.1.16
 ```
@@ -292,7 +295,7 @@ cd ~/mybuild
 The artifact is produced at:
 
 ```bash
-~/mybuild/zwc-war/zm-web-client/build/dist/jetty/webapps/zimbra.war
+/mnt/zimbra/zwc-war/zm-web-client/build/dist/jetty/webapps/zimbra.war
 ```
 
 If `/mnt/zimbra` is mounted, the helper also copies the artifact there.

@@ -11,6 +11,9 @@ one-shot command in [README.md](./README.md):
 
 and deploy the returned `zimbra-<resolved-version>.war` artifact.
 
+That admin path uses a container-local source tree by default and does not
+persist `zwc-war` back to the host.
+
 ## Goal
 
 This document records the workflow used to build `zm-web-client` and produce
@@ -34,6 +37,9 @@ For the one-shot `docker.sh --build-war` path, Docker runs the helper inside
 the container with `docker exec` and does not require SSH login to the
 container. The host-side `./Zimbra` directory is only the bind-mounted
 workspace; the returned `zimbra.war` is copied back beside `docker.sh`.
+
+Admin mode uses `/tmp/zwc-war` inside the container. Developer mode uses
+`/mnt/zimbra/zwc-war`.
 
 Manual shell work can still be done over SSH if the image was built with a
 container login key:
@@ -75,7 +81,7 @@ Important caveat:
 Example usage:
 
 ```bash
-cd ~/mybuild
+cd /mnt/zimbra
 ./build_zm_web_client_war.sh --init
 ./build_zm_web_client_war.sh --version 10.1.16
 ./build_zm_web_client_war.sh --version 10.1.16 \
@@ -94,7 +100,7 @@ If `/mnt/zimbra` is mounted, the helper copies the resulting artifact to:
 The in-tree build artifact remains at:
 
 ```bash
-~/mybuild/zwc-war/zm-web-client/build/dist/jetty/webapps/zimbra.war
+/mnt/zimbra/zwc-war/zm-web-client/build/dist/jetty/webapps/zimbra.war
 ```
 
 ## Minimal Repository Set
@@ -129,12 +135,12 @@ below the requested release for that repository.
 ## Local Development Workflow
 
 For a local edit and rebuild loop, pin an exact version and use
-`--allow-dirty`.
+`--developer-mode --allow-dirty`.
 
 Example:
 
 ```bash
-./docker.sh --build-war 10.1.16 --allow-dirty
+./docker.sh --build-war 10.1.16 --developer-mode --allow-dirty
 ```
 
 That allows you to:
@@ -148,6 +154,7 @@ Important behavior:
 
 - `10.1` is a moving target and is re-resolved from GitHub each run
 - `10.1.16` is pinned to that exact release
+- `--allow-dirty` requires `--developer-mode`
 - `--allow-dirty` only reuses dirty checkouts that are already on the resolved tag
 - if GitHub later resolves `10.1` to `10.1.17`, a dirty local `10.1.16` tree is not switched automatically
 
