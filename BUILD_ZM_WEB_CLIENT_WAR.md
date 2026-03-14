@@ -1,5 +1,16 @@
 # Building `zimbra.war` Without a Full Release Build
 
+This is a maintainer and developer reference.
+
+If you are an admin who just needs the latest `10.1.x` asset bundle, use the
+one-shot command in [README.md](./README.md):
+
+```bash
+./docker.sh --build-war 10.1
+```
+
+and deploy the returned `zimbra-<resolved-version>.war` artifact.
+
 ## Goal
 
 This document records the workflow used to build `zm-web-client` and produce
@@ -8,7 +19,7 @@ the full `build_zimbra.sh --version 10.1` release build.
 
 The intent is to:
 
-- build the classic web client war inside the container over SSH
+- build the classic web client war inside the container
 - reuse as much of the normal Zimbra build model as possible
 - keep a documented path for comparing the war against the full build output
 
@@ -16,11 +27,16 @@ The intent is to:
 
 - Repository: `DockerZimbraRHEL8`
 - Container SSH port: `717`
-- Host mount: `~/Zimbra` -> `/mnt/zimbra`
-- Recommended execution path: SSH into the container as the normal user
+- Host mount: `./Zimbra` -> `/mnt/zimbra` by default
+- Recommended automation path: `docker exec` as the normal container user
 
-The attached Docker console was not treated as authoritative for long-running
-builds. The working assumption was that builds should be run over SSH:
+For the one-shot `docker.sh --build-war` path, Docker runs the helper inside
+the container with `docker exec` and does not require SSH login to the
+container. The host-side `./Zimbra` directory is only the bind-mounted
+workspace; the returned `zimbra.war` is copied back beside `docker.sh`.
+
+Manual shell work can still be done over SSH if the image was built with a
+container login key:
 
 ```bash
 ssh -p 717 jad@localhost
@@ -39,7 +55,15 @@ Current behavior:
 - `--init` reuses `build_zimbra.sh --init` if the environment is not already present
 - normal builds do not install OS packages behind the user's back
 - if `ant-contrib` is missing, the helper follows the same jar/bootstrap model used by `zm-build/build.pl`
-- `zm-web-client` is built with `ant clean-pkg prod-war`
+- when `/mnt/zimbra` is available, the helper defaults its checkout workspace to `/mnt/zimbra/zwc-war`
+- `zm-web-client` is built from a clean build tree so metadata tokens are restamped on every run
+- `--allow-dirty` can reuse local edits if an existing checkout is already on the resolved tag
+- build metadata can be stamped explicitly with:
+  - `--build-num`
+  - `--build-release`
+  - `--build-date`
+  - `--build-type`
+  - `--build-host`
 
 Important caveat:
 
@@ -54,6 +78,11 @@ Example usage:
 cd ~/mybuild
 ./build_zm_web_client_war.sh --init
 ./build_zm_web_client_war.sh --version 10.1.16
+./build_zm_web_client_war.sh --version 10.1.16 \
+  --build-num 1010000 \
+  --build-release 20260119141248 \
+  --build-date 20260119141248
+./build_zm_web_client_war.sh --version 10.1.16 --allow-dirty
 ```
 
 If `/mnt/zimbra` is mounted, the helper copies the resulting artifact to:
@@ -96,6 +125,31 @@ For the validated `10.1.16` build, the resolved tags were:
 
 `zm-zcs` fell back to `10.1.13` because that was the highest matching tag at or
 below the requested release for that repository.
+
+## Local Development Workflow
+
+For a local edit and rebuild loop, pin an exact version and use
+`--allow-dirty`.
+
+Example:
+
+```bash
+./docker.sh --build-war 10.1.16 --allow-dirty
+```
+
+That allows you to:
+
+- build the war
+- test it with Project Z Bridge
+- modify files under `./Zimbra/zwc-war`
+- rerun the same command without recloning
+
+Important behavior:
+
+- `10.1` is a moving target and is re-resolved from GitHub each run
+- `10.1.16` is pinned to that exact release
+- `--allow-dirty` only reuses dirty checkouts that are already on the resolved tag
+- if GitHub later resolves `10.1` to `10.1.17`, a dirty local `10.1.16` tree is not switched automatically
 
 ## Dependency Model
 

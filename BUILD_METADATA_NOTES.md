@@ -2,17 +2,24 @@
 
 ## Scope
 
-This note records the decision made around the version/build string shown by
-Project Z Bridge when using:
+This note records how the direct `zimbra.war` helper now handles the version
+and build metadata shown by Project Z Bridge in the About dialog.
+
+The comparison is still between:
 
 - a full `build_zimbra.sh --version 10.1` build
 - a direct `zimbra.war` build produced by `build_zm_web_client_war.sh`
 
-The goal is to avoid revisiting the same discussion later.
+## Canonical Build Path
 
-## Observed Behavior
+The canonical FOSS release identity still comes from `build_zimbra.sh` and the
+`zm-build/build.pl` pipeline.
 
-### Full build via `build_zimbra.sh`
+That path owns:
+
+- the builder ID model
+- the incrementing `.build.number`
+- the release timestamp used for official builds
 
 Example:
 
@@ -20,114 +27,85 @@ Example:
 Project Z Bridge (ZWC 10.1.15_GA_1011056 (build 20260119141248))
 ```
 
-This is the canonical format for the FOSS build path used here.
+## What Was Wrong In The Direct War Path
 
-### Direct `zimbra.war` build
+The first direct war implementation could build the right static assets but was
+reusing an existing `zm-web-client/build` tree.
 
-Example:
+That mattered because `prod-war` does not fully clean the generated web-client
+tree. If `build/WebRoot/js/zimbraMail/share/model/ZmSettings.js` already had
+older replaced values in it, the next build would keep those stale values.
+
+That is why the About dialog could show:
 
 ```text
 Project Z Bridge (ZWC 10.1.16_GA_${zimbra.buildinfo.buildnum}.jad (build jad))
 ```
 
-This is not the same metadata contract as the full build.
+The source template still had the right tokens, but the generated file was not
+being rebuilt cleanly.
 
-## What the Full Build Is Doing
+## Current Direct War Behavior
 
-`build_zimbra.sh` defines the numbering scheme using:
+`build_zm_web_client_war.sh` now does two things to fix that:
 
-- `.build.builder`
-- `.build.number`
+1. it builds `zm-web-client` from a clean build tree
+2. it injects explicit Ant metadata for:
+   - `zimbra.buildinfo.version`
+   - `zimbra.buildinfo.release`
+   - `zimbra.buildinfo.date`
+   - `DSTAMP`
+   - `TSTAMP`
 
-The script documents `.build.number` as:
+That means the helper can now stamp usable values into `ZmSettings.js` and the
+resulting `zimbra.war`.
 
-```text
-IIInnnn
+Example direct build metadata:
+
+```bash
+./build_zm_web_client_war.sh --version 10.1.16 \
+  --build-num 1010000 \
+  --build-release 20260119141248 \
+  --build-date 20260119141248
 ```
 
-where:
+Expected stamped values:
 
-- `III` is the three-digit builder ID
-- `nnnn` is the incrementing build counter
+- `CLIENT_VERSION` -> `10.1.16_GA_1010000`
+- `CLIENT_RELEASE` -> `20260119141248`
+- `CLIENT_DATETIME` -> `20260119-141248`
 
-Examples from the script:
+For Project Z Bridge, that provides the values needed for the About dialog.
 
-- `101` = FOSS and `build_zimbra.sh`
-- `102` = VSherwood
-- `103` = JDunphy
-- `150` = Generic
+## Important Distinction
 
-The full build path passes this metadata into `zm-build/build.pl`, which is why
-the final artifact can expose values such as:
+This does not make the direct war path the authoritative release-number source.
 
-- release tag, for example `10.1.15`
-- release class, for example `GA`
-- FOSS build number, for example `1011056`
-- build timestamp, for example `20260119141248`
+It only means the helper can stamp explicit metadata values into the war when
+you already know what values you want to present.
 
-## What the Direct War Build Is Doing
+So the distinction remains:
 
-The direct `zimbra.war` build currently compiles the correct web client assets
-for the requested tag, but it does not reproduce the full FOSS metadata path.
+- `build_zimbra.sh` is still the canonical release identity path
+- `build_zm_web_client_war.sh` can now stamp compatible metadata when needed
 
-That is why the direct build can show:
+## Current Defaults
 
-- the correct ZWC tag, for example `10.1.16`
-- but an unresolved or fallback build identifier such as:
-  - `${zimbra.buildinfo.buildnum}`
-  - `jad`
+For this repository, the helper defaults are currently set to:
 
-In other words, it behaves like a local/developer build rather than a canonical
-FOSS numbered release build.
+- build number: `1010000`
+- build release: `20260119141248`
 
-## Decision
+Those defaults exist so Project Z Bridge can present real values in the About
+dialog without leaving placeholders unresolved.
 
-The important thing for the direct `zimbra.war` path is that the ZWC version is
-correct, for example:
+If different values are needed later, use the helper options instead of editing
+the generated files by hand.
 
-- `10.1.15`
-- `10.1.16`
+## Practical Guidance
 
-The direct `zimbra.war` path does not need to pretend to be a canonical
-`build_zimbra.sh` release artifact unless there is a real need to reproduce the
-entire metadata pipeline.
-
-So the accepted model is:
-
-- `build_zimbra.sh` remains the authoritative source of release/build identity
-- the direct `zimbra.war` helper is acceptable if it reports the correct ZWC tag
-- if the full FOSS build stamp is missing, Project Z Bridge should tolerate that
-  rather than treating the local war build as a canonical numbered release
-
-## Practical Recommendation
-
-For Project Z Bridge:
-
-- always display the correct ZWC version if available
-- display the full FOSS build stamp only when it actually exists
-- treat direct/local war builds as a different provenance class from full
-  `build_zimbra.sh` release builds
-
-This keeps the UI honest:
-
-- users still see the correct asset version
-- canonical FOSS build numbers remain reserved for the full build pipeline
-
-## Why This Was Chosen
-
-Trying to make the direct `zimbra.war` helper emit the same identity string as
-`build_zimbra.sh` would require reproducing more of the full metadata contract,
-not just building the same static assets.
-
-That extra complexity is not currently justified if the main requirement is:
-
-- correct ZWC version display
-- not full release-artifact identity
-
-## Summary
-
-- The direct `zimbra.war` build is useful for generating static assets.
-- The full `build_zimbra.sh` build remains the canonical release identity path.
-- Showing the correct ZWC tag matters most for the direct build.
-- Full FOSS numbering and timestamp metadata should remain associated with the
-  full build pipeline.
+- If you want canonical release identity, use `build_zimbra.sh`.
+- If you want a direct `zimbra.war` with usable About metadata, use
+  `build_zm_web_client_war.sh` with explicit metadata options.
+- If Project Z Bridge only needs the values to be present and stable, the
+  direct helper is now sufficient for that use case.

@@ -91,48 +91,52 @@ fi
 #==================================================================================
 # BEGIN sshd
 
-# Directory where SSH keys will be stored
-SSH_KEYS_DIR="/etc/ssh"
-# Path to the tar archive
-SSH_KEYS_TAR="/mnt/zimbra/ssh-keys.tar"
-
-# Function to generate SSH host keys
-generate_ssh_keys() {
-    echo "Generating new SSH host keys..."
-    [ ! -f "$SSH_KEYS_DIR/ssh_host_rsa_key" ] && ssh-keygen -q -t rsa -b 4096 -N '' -f "$SSH_KEYS_DIR/ssh_host_rsa_key"
-    [ ! -f "$SSH_KEYS_DIR/ssh_host_ecdsa_key" ] && ssh-keygen -q -t ecdsa -b 521 -N '' -f "$SSH_KEYS_DIR/ssh_host_ecdsa_key"
-    [ ! -f "$SSH_KEYS_DIR/ssh_host_ed25519_key" ] && ssh-keygen -q -t ed25519 -N '' -f "$SSH_KEYS_DIR/ssh_host_ed25519_key"
-}
-
-# Check if the tar file exists
-if [ -f "$SSH_KEYS_TAR" ]; then
-    echo "Existing SSH host keys archive found. Extracting to $SSH_KEYS_DIR..."
-    tar xf "$SSH_KEYS_TAR" -C "$SSH_KEYS_DIR"
+if [ "${ZIMBRA_SKIP_SSH_SETUP:-0}" = "1" ]; then
+    echo "[entrypoint] ZIMBRA_SKIP_SSH_SETUP=1; skipping SSH host key setup and sshd"
 else
-    echo "No SSH host keys archive found. Generating new keys..."
-    generate_ssh_keys
-    
-    # Create the directory if it doesn't exist
-    mkdir -p "$(dirname "$SSH_KEYS_TAR")"
-    
-    echo "Creating new SSH host keys archive at $SSH_KEYS_TAR..."
-    # Create tar archive with the keys
-    (cd "$SSH_KEYS_DIR" && tar cf "$SSH_KEYS_TAR" \
-        ssh_host_rsa_key ssh_host_rsa_key.pub \
-        ssh_host_ecdsa_key ssh_host_ecdsa_key.pub \
-        ssh_host_ed25519_key ssh_host_ed25519_key.pub)
-    
-    # Verify the archive was created
-    if [ -f "$SSH_KEYS_TAR" ]; then
-        echo "Successfully created SSH host keys archive."
-    else
-        echo "Warning: Failed to create SSH host keys archive at $SSH_KEYS_TAR"
-    fi
-fi
+    # Directory where SSH keys will be stored
+    SSH_KEYS_DIR="/etc/ssh"
+    # Path to the tar archive
+    SSH_KEYS_TAR="/mnt/zimbra/ssh-keys.tar"
 
-# Start sshd in background
-echo "Starting sshd in background..."
-/usr/sbin/sshd
+    # Function to generate SSH host keys
+    generate_ssh_keys() {
+        echo "Generating new SSH host keys..."
+        [ ! -f "$SSH_KEYS_DIR/ssh_host_rsa_key" ] && ssh-keygen -q -t rsa -b 4096 -N '' -f "$SSH_KEYS_DIR/ssh_host_rsa_key"
+        [ ! -f "$SSH_KEYS_DIR/ssh_host_ecdsa_key" ] && ssh-keygen -q -t ecdsa -b 521 -N '' -f "$SSH_KEYS_DIR/ssh_host_ecdsa_key"
+        [ ! -f "$SSH_KEYS_DIR/ssh_host_ed25519_key" ] && ssh-keygen -q -t ed25519 -N '' -f "$SSH_KEYS_DIR/ssh_host_ed25519_key"
+    }
+
+    # Check if the tar file exists
+    if [ -f "$SSH_KEYS_TAR" ]; then
+        echo "Existing SSH host keys archive found. Extracting to $SSH_KEYS_DIR..."
+        tar xf "$SSH_KEYS_TAR" -C "$SSH_KEYS_DIR"
+    else
+        echo "No SSH host keys archive found. Generating new keys..."
+        generate_ssh_keys
+
+        # Create the directory if it doesn't exist
+        mkdir -p "$(dirname "$SSH_KEYS_TAR")"
+
+        echo "Creating new SSH host keys archive at $SSH_KEYS_TAR..."
+        # Create tar archive with the keys
+        (cd "$SSH_KEYS_DIR" && tar cf "$SSH_KEYS_TAR" \
+            ssh_host_rsa_key ssh_host_rsa_key.pub \
+            ssh_host_ecdsa_key ssh_host_ecdsa_key.pub \
+            ssh_host_ed25519_key ssh_host_ed25519_key.pub)
+
+        # Verify the archive was created
+        if [ -f "$SSH_KEYS_TAR" ]; then
+            echo "Successfully created SSH host keys archive."
+        else
+            echo "Warning: Failed to create SSH host keys archive at $SSH_KEYS_TAR"
+        fi
+    fi
+
+    # Start sshd in background
+    echo "Starting sshd in background..."
+    /usr/sbin/sshd
+fi
 
 # END sshd
 #==================================================================================

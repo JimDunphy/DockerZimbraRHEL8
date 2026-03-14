@@ -49,16 +49,21 @@ ENV PATH=${JAVA_HOME}/bin:${PATH}
 RUN dnf install -y openssh-server && \
     systemctl enable sshd
 
-# Create the $USER_NAME user and add SSH key
+# Create the $USER_NAME user and optionally add an SSH key for container login
 ARG USER_NAME
-RUN useradd -m $USER_NAME && \
+ARG USER_UID=1000
+ARG USER_GID=1000
+ARG SSH_PUBKEY=""
+RUN if ! getent group "${USER_GID}" >/dev/null; then \
+        groupadd -g "${USER_GID}" "${USER_NAME}"; \
+    fi && \
+    useradd -m -u "${USER_UID}" -g "${USER_GID}" $USER_NAME && \
     mkdir -p /home/$USER_NAME/.ssh && \
-    chmod 700 /home/$USER_NAME/.ssh
-
-# Copy public key (replace with actual path if different)
-COPY id_rsa.pub /home/$USER_NAME/.ssh/authorized_keys
-
-RUN chmod 600 /home/$USER_NAME/.ssh/authorized_keys && \
+    chmod 700 /home/$USER_NAME/.ssh && \
+    if [ -n "$SSH_PUBKEY" ]; then \
+        printf '%s\n' "$SSH_PUBKEY" > /home/$USER_NAME/.ssh/authorized_keys; \
+        chmod 600 /home/$USER_NAME/.ssh/authorized_keys; \
+    fi && \
     chown -R $USER_NAME:$USER_NAME /home/$USER_NAME/.ssh
 
 # Install sudo (if not already installed)
