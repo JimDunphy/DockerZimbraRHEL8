@@ -415,7 +415,9 @@ build_web_client_war() {
 
 copy_artifact() {
   local artifact="${WORKDIR}/zm-web-client/build/dist/jetty/webapps/zimbra.war"
-  local output_file="${OUTPUT_DIR}/zimbra-${RESOLVED_VERSION}.war"
+  local output_file="${OUTPUT_DIR}/zimbra.war"
+  local versioned_output_file="${OUTPUT_DIR}/zimbra-${RESOLVED_VERSION}.war"
+  local version_file="${OUTPUT_DIR}/zimbra.version"
 
   [ -f "$artifact" ] || fail "Expected artifact not found: ${artifact}"
 
@@ -426,7 +428,11 @@ copy_artifact() {
 
   if [ -d "$OUTPUT_DIR" ]; then
     cp "$artifact" "$output_file"
+    cp "$artifact" "$versioned_output_file"
+    printf '%s\n' "$RESOLVED_VERSION" > "$version_file"
     log "Copied artifact to ${output_file}"
+    log "Copied versioned artifact to ${versioned_output_file}"
+    log "Recorded resolved version in ${version_file}"
   else
     log "Output directory ${OUTPUT_DIR} not present; skipping copy"
   fi

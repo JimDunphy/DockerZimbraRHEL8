@@ -85,13 +85,29 @@ EOF
 
 resolve_path() {
   local input="$1"
+  local dir=""
+  local base=""
 
   case "$input" in
     /*)
-      printf '%s\n' "$input"
+      dir="$(dirname "$input")"
+      base="$(basename "$input")"
+      if [ -d "$dir" ]; then
+        dir="$(cd "$dir" && pwd -P)"
+        printf '%s/%s\n' "$dir" "$base"
+      else
+        printf '%s\n' "$input"
+      fi
       ;;
     *)
-      printf '%s/%s\n' "$(pwd -P)" "$input"
+      dir="$(dirname "$input")"
+      base="$(basename "$input")"
+      if [ -d "$dir" ]; then
+        dir="$(cd "$dir" && pwd -P)"
+        printf '%s/%s\n' "$dir" "$base"
+      else
+        printf '%s/%s\n' "$(pwd -P)" "$input"
+      fi
       ;;
   esac
 }
@@ -284,29 +300,10 @@ cd /mnt/zimbra
 EOF
 }
 
-latest_war_after() {
-  local after_epoch="$1"
-  local artifact=""
-  local artifact_epoch=""
-
-  artifact="$(
-    find "$ZIMBRA_DIR" -maxdepth 1 -type f -name 'zimbra-*.war' -printf '%T@\t%p\n' \
-      | sort -nr -k1,1 \
-      | head -n1 \
-      | cut -f2-
-  )"
-
-  [ -n "$artifact" ] || return 1
-
-  artifact_epoch="$(stat -c %Y "$artifact")"
-  [ "$artifact_epoch" -ge "$after_epoch" ] || return 1
-
-  printf '%s\n' "$artifact"
-}
-
 build_war() {
-  local before_epoch=""
   local artifact=""
+  local resolved_version=""
+  local version_file=""
   local final_artifact=""
   local stop_after=0
   local existing_mount=""
@@ -353,12 +350,27 @@ build_war() {
 
   wait_for_exec
 
-  before_epoch="$(date +%s)"
   log "Building zimbra.war for ${WAR_VERSION}"
-  run_war_build_in_container "$WAR_VERSION"
+  artifact="${ZIMBRA_DIR}/zimbra.war"
+  version_file="${ZIMBRA_DIR}/zimbra.version"
+  rm -f "$artifact" "$version_file"
 
-  artifact="$(latest_war_after "$before_epoch")" || fail "zimbra.war was not copied back to ${ZIMBRA_DIR}"
-  final_artifact="${ARTIFACT_DIR}/$(basename "$artifact")"
+  if ! run_war_build_in_container "$WAR_VERSION"; then
+    fail "zimbra.war build failed"
+  fi
+
+  test -f "$artifact" || fail "zimbra.war was not copied back to ${ZIMBRA_DIR}"
+  if test -f "$version_file"; then
+    IFS= read -r resolved_version < "$version_file" || true
+  fi
+
+  if test -n "$resolved_version"; then
+    final_artifact="${ARTIFACT_DIR}/zimbra-${resolved_version}.war"
+  else
+    final_artifact="${ARTIFACT_DIR}/zimbra.war"
+  fi
+
+  mkdir -p "$ARTIFACT_DIR"
   if [ "$artifact" != "$final_artifact" ]; then
     cp "$artifact" "$final_artifact"
   fi
